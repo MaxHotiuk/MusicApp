@@ -1,0 +1,387 @@
+@page "/mp3-editor"
+@using MusicApp.Shared.Models
+@using System.IO
+@using System.Net.Http.Headers
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<MudText Typo="Typo.h3" Class="mb-4">MP3 Metadata Editor</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h5" Class="mb-4">Upload MP3 File</MudText>
+            
+            <InputFile id="fileInput" OnChange="OnInputFileChange" accept=".mp3" Class="mb-4" />
+            
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="my-2">@errorMessage</MudAlert>
+            }
+            
+            @if (isUploading)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-4" />
+            }
+            
+            @if (metadata != null)
+            {
+                <MudText Typo="Typo.body1" Class="mb-2">
+                    Current file: <strong>@fileName</strong>
+                </MudText>
+                
+                <MudDivider Class="my-4" />
+                
+                <MudForm @ref="form" Model="@metadata">
+                    <MudTextField @bind-Value="metadata.Title" Label="Title" Required="true" RequiredError="Title is required" />
+                    <MudTextField @bind-Value="metadata.Artist" Label="Artist" Class="mt-3" />
+                    <MudTextField @bind-Value="metadata.Album" Label="Album" Class="mt-3" />
+                    <MudTextField @bind-Value="metadata.Year" Label="Year" Class="mt-3" T="string"
+                                InputType="InputType.Number" />
+                    <MudTextField @bind-Value="metadata.Genre" Label="Genre" Class="mt-3" 
+                                HelperText="Separate multiple genres with commas" />
+                    <MudTextField @bind-Value="metadata.TrackNumber" Label="Track Number" Class="mt-3" 
+                                T="string" InputType="InputType.Number" />
+                    <MudTextField @bind-Value="metadata.Comment" Label="Comment" Class="mt-3" 
+                                Lines="3" />
+                                
+                    <MudDivider Class="my-4" />
+                    
+                    <!-- Album Art Section -->
+                    <MudText Typo="Typo.h6" Class="mb-3">Album Art</MudText>
+                    
+                    @if (metadata.HasAlbumArt || albumArtUrl != null)
+                    {
+                        <div class="d-flex justify-center mb-3">
+                            <img src="@(albumArtUrl ?? $"data:{metadata.AlbumArtMimeType};base64,{Convert.ToBase64String(metadata.AlbumArt!)}")" 
+                                 alt="Album Art" style="max-width: 200px; max-height: 200px;" />
+                        </div>
+                    }
+                    
+                    <div class="d-flex flex-column">
+                        <InputFile id="albumArtInput" OnChange="OnAlbumArtChange" accept="image/*" Class="mb-2" />
+                        
+                        <div class="d-flex mt-2">
+                            <MudCheckBox T="bool" @bind-Checked="preserveExistingAlbumArt" 
+                                       Disabled="newAlbumArtFile != null || !metadata.HasAlbumArt"
+                                       Class="mr-4">Keep existing album art</MudCheckBox>
+                                       
+                            <MudCheckBox T="bool" @bind-Checked="removeAlbumArt" 
+                                       Disabled="newAlbumArtFile != null"
+                                       Class="mr-4">Remove album art</MudCheckBox>
+                        </div>
+                    </div>
+                </MudForm>
+                
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                          OnClick="SaveMetadata" Class="mt-4">
+                    Save Changes
+                </MudButton>
+                
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" 
+                          OnClick="ResetForm" Class="mt-4 ml-2">
+                    Reset
+                </MudButton>
+            }
+        </MudPaper>
+    </MudItem>
+    
+    @if (metadata != null)
+    {
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4">
+                <MudText Typo="Typo.h5" Class="mb-4">Audio Player</MudText>
+                
+                @if (!string.IsNullOrEmpty(previewUrl))
+                {
+                    <audio controls class="w-100" style="width: 100%;">
+                        <source src="@previewUrl" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">
+                        Upload and save an MP3 file to preview it here
+                    </MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private IBrowserFile? browserFile;
+    private string? fileName;
+    private Mp3Metadata? metadata;
+    private bool isUploading = false;
+    private string errorMessage = string.Empty;
+    private string previewUrl = string.Empty;
+    private MudForm? form;
+    
+    // Album art related fields
+    private IBrowserFile? newAlbumArtFile;
+    private string? albumArtUrl;
+    private bool preserveExistingAlbumArt = true;
+    private bool removeAlbumArt = false;
+    
+    private async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        try {
+            errorMessage = string.Empty;
+            
+            browserFile = e.File;
+            fileName = e.File.Name;
+            
+            // Reset album art fields
+            newAlbumArtFile = null;
+            albumArtUrl = null;
+            preserveExistingAlbumArt = true;
+            removeAlbumArt = false;
+            
+            // Verify it's an MP3 file
+            if (!browserFile.ContentType.Equals("audio/mpeg") && !Path.GetExtension(browserFile.Name).Equals(".mp3", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = "Only MP3 files are allowed.";
+                browserFile = null;
+                return;
+            }
+            
+            // Check file size (50MB max)
+            if (browserFile.Size > 52428800)
+            {
+                errorMessage = "File size exceeds the 50MB limit.";
+                browserFile = null;
+                return;
+            }
+            
+            isUploading = true;
+            
+            // Create a new MultipartFormDataContent
+            using var content = new MultipartFormDataContent();
+            
+            // Convert the file to stream content
+            var fileContent = new StreamContent(browserFile.OpenReadStream(52428800)); // 50MB max
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg");
+            
+            // Add the file to the form data
+            content.Add(fileContent, "file", browserFile.Name);
+            
+            // Send the file to the API
+            var response = await Http.PostAsync("api/Mp3/upload", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                metadata = await response.Content.ReadFromJsonAsync<Mp3Metadata>();
+                
+                if (metadata != null)
+                {
+                    // If title is empty, use the filename without extension
+                    if (string.IsNullOrEmpty(metadata.Title))
+                    {
+                        metadata.Title = Path.GetFileNameWithoutExtension(browserFile.Name);
+                    }
+                    
+                    // Create an object URL for the file
+                    previewUrl = await CreateObjectUrlFromFile(browserFile);
+                }
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Error: {error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+    
+    private async Task OnAlbumArtChange(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            newAlbumArtFile = e.File;
+            
+            // When selecting a new album art file, disable other options
+            preserveExistingAlbumArt = false;
+            removeAlbumArt = false;
+            
+            // Check file size (5MB max for album art)
+            if (newAlbumArtFile.Size > 5242880)
+            {
+                errorMessage = "Album art file size exceeds the 5MB limit.";
+                newAlbumArtFile = null;
+                return;
+            }
+            
+            // Create a preview for the selected image
+            using var memoryStream = new MemoryStream();
+            await newAlbumArtFile.OpenReadStream(5242880).CopyToAsync(memoryStream);
+            var imageBytes = memoryStream.ToArray();
+            
+            // Create data URL for preview
+            albumArtUrl = $"data:{newAlbumArtFile.ContentType};base64,{Convert.ToBase64String(imageBytes)}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading album art: {ex.Message}";
+            newAlbumArtFile = null;
+            albumArtUrl = null;
+        }
+    }
+    
+    private async Task SaveMetadata()
+    {
+        if (browserFile == null || metadata == null)
+            return;
+            
+        try
+        {
+            isUploading = true;
+            errorMessage = string.Empty;
+            
+            // Create a new MultipartFormDataContent
+            using var content = new MultipartFormDataContent();
+            
+            // Convert the file to stream content
+            var fileContent = new StreamContent(browserFile.OpenReadStream(52428800)); // 50MB max
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg");
+            
+            // Add the file to the form data
+            content.Add(fileContent, "File", browserFile.Name);
+            
+            // Add metadata properties
+            content.Add(new StringContent(metadata.Title ?? ""), "Metadata.Title");
+            content.Add(new StringContent(metadata.Artist ?? ""), "Metadata.Artist");
+            content.Add(new StringContent(metadata.Album ?? ""), "Metadata.Album");
+            content.Add(new StringContent(metadata.Year ?? ""), "Metadata.Year");
+            content.Add(new StringContent(metadata.Genre ?? ""), "Metadata.Genre");
+            content.Add(new StringContent(metadata.Comment ?? ""), "Metadata.Comment");
+            content.Add(new StringContent(metadata.TrackNumber ?? ""), "Metadata.TrackNumber");
+            
+            // Add album art file if a new one was selected
+            if (newAlbumArtFile != null)
+            {
+                var albumArtContent = new StreamContent(newAlbumArtFile.OpenReadStream(5242880)); // 5MB max
+                albumArtContent.Headers.ContentType = new MediaTypeHeaderValue(newAlbumArtFile.ContentType);
+                content.Add(albumArtContent, "AlbumArtFile", newAlbumArtFile.Name);
+            }
+            else
+            {
+                // Set flags for album art handling
+                content.Add(new StringContent(preserveExistingAlbumArt.ToString()), "Metadata.PreserveExistingAlbumArt");
+                content.Add(new StringContent(removeAlbumArt.ToString()), "RemoveAlbumArt");
+            }
+            
+            // Send the file with updated metadata to the API
+            var response = await Http.PostAsync("api/Mp3/update", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                // Get the file content
+                var fileBytes = await response.Content.ReadAsByteArrayAsync();
+                
+                // Create a new object URL for the updated file
+                previewUrl = await CreateObjectUrlFromBytes(fileBytes);
+                
+                // Download the file
+                await DownloadFileFromBytes(fileBytes, metadata.Title ?? fileName ?? "updated.mp3");
+                
+                Snackbar.Add("Metadata updated successfully!", Severity.Success);
+                
+                // Reset album art selection
+                newAlbumArtFile = null;
+                albumArtUrl = null;
+                removeAlbumArt = false;
+                preserveExistingAlbumArt = true;
+                
+                // Update the browser file with the new version
+                await OnInputFileChange(new InputFileChangeEventArgs(new List<IBrowserFile> { browserFile }));
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Error: {error}";
+                Snackbar.Add($"Error: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+            Snackbar.Add($"An error occurred: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+    
+    private void ResetForm()
+    {
+        if (form != null)
+        {
+            form.ResetValidation();
+        }
+        
+        // Reset album art selection
+        newAlbumArtFile = null;
+        albumArtUrl = null;
+        removeAlbumArt = false;
+        preserveExistingAlbumArt = true;
+    }
+    
+    private async Task<string> CreateObjectUrlFromFile(IBrowserFile file)
+    {
+        // Read file bytes
+        using var memoryStream = new MemoryStream();
+        await file.OpenReadStream(52428800).CopyToAsync(memoryStream); // 50MB max
+        byte[] fileBytes = memoryStream.ToArray();
+        
+        // Create an object URL for the audio player
+        return await JSRuntime.InvokeAsync<string>("createObjectURL", fileBytes, "audio/mpeg");
+    }
+    
+    private async Task<string> CreateObjectUrlFromBytes(byte[] fileBytes)
+    {
+        // Create an object URL for the audio player
+        return await JSRuntime.InvokeAsync<string>("createObjectURL", fileBytes, "audio/mpeg");
+    }
+    
+    private async Task DownloadFileFromBytes(byte[] fileBytes, string fileName)
+    {
+        // Download the file
+        await JSRuntime.InvokeVoidAsync("downloadFileFromBytes", fileBytes, fileName);
+    }
+}
+
+<script>
+    // Create an object URL from a byte array for audio previewing
+    window.createObjectURL = (byteArray, contentType) => {
+        const blob = new Blob([byteArray], { type: contentType });
+        const url = URL.createObjectURL(blob);
+        return url;
+    };
+
+    // Download file from byte array
+    window.downloadFileFromBytes = (byteArray, fileName) => {
+        const blob = new Blob([byteArray], { type: 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up the URL object
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+    };
+</script>
