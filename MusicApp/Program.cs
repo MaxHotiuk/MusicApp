@@ -36,7 +36,7 @@ else
     app.UseHsts();
 }
 
-//app.UseHttpsRedirection();
+app.UseHttpsRedirection();
 
 
 app.UseAntiforgery();
