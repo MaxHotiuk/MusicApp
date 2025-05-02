@@ -15,9 +15,6 @@ builder.Services.AddControllers();
 builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 
-builder.Services.AddScoped(sp => 
-    new HttpClient { BaseAddress = new Uri("http://localhost:5238") });
-
 builder.Services.AddScoped<IMp3MetadataService, Mp3MetadataService>();
 
 builder.Services.Configure<FormOptions>(options =>
@@ -39,7 +36,7 @@ else
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 
 app.UseAntiforgery();
