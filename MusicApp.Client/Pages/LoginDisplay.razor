@@ -1,49 +1,34 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using MusicApp.Client.Interfaces
-@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IAuthService AuthService
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JSRuntime
 
 <AuthorizeView>
     <Authorized>
-        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-            <MudMenuItem>Hello, @context.User.Identity!.Name!</MudMenuItem>
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" Direction="Direction.Bottom" OffsetY="true">
+            <MudText Typo="Typo.subtitle2" Class="px-4 py-2">
+                Hello, @context.User.Identity?.Name!
+            </MudText>
             <MudDivider />
-            <MudMenuItem OnClick="@BeginSignOut">Logout</MudMenuItem>
+            <MudMenuItem Href="/profile">Profile</MudMenuItem>
+            <MudMenuItem Href="/playlists">My Playlists</MudMenuItem>
+            <MudMenuItem OnClick="LogoutClick">Logout</MudMenuItem>
         </MudMenu>
     </Authorized>
     <NotAuthorized>
-        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="@Login">Login</MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoginClick">Login</MudButton>
     </NotAuthorized>
 </AuthorizeView>
 
 @code {
-    // Changed to use direct method reference without lambda
-    public async Task Login()
+    private async Task LogoutClick()
     {
-        try 
-        {
-            await JSRuntime.InvokeVoidAsync("console.log", "Login button clicked");
-            NavigationManager.NavigateTo("/login");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", "Login error: " + ex.Message);
-        }
+        await AuthService.Logout();
+        NavigationManager.NavigateTo("/");
     }
 
-    private async Task BeginSignOut()
+    private void LoginClick()
     {
-        try 
-        {
-            await JSRuntime.InvokeVoidAsync("console.log", "Logout button clicked");
-            await AuthService.Logout();
-            NavigationManager.NavigateTo("/");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", "Logout error: " + ex.Message);
-        }
+        NavigationManager.NavigateTo("/login");
     }
 }

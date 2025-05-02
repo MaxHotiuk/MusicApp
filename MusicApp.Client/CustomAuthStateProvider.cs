@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using MusicApp.Client.Interfaces;
 using System.Security.Claims;
+using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace MusicApp.Client;
 
@@ -23,6 +25,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
 
         if (string.IsNullOrEmpty(token))
         {
+            Console.WriteLine("No token found in local storage");
             return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
         }
 
@@ -30,19 +33,25 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
         _httpClient.DefaultRequestHeaders.Authorization = 
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
-        // Create claims based on token
-        // In a real app, you might want to decode the JWT token to get actual claims
-        var claims = new List<Claim>
+        try
         {
-            new Claim(ClaimTypes.Name, "Spotify User"),
-            new Claim(ClaimTypes.NameIdentifier, "spotify_user"),
-            new Claim(ClaimTypes.Role, "User")
-        };
-
-        var identity = new ClaimsIdentity(claims, "Spotify Auth");
-        var user = new ClaimsPrincipal(identity);
-
-        return new AuthenticationState(user);
+            // Parse the JWT token to extract claims
+            var handler = new JwtSecurityTokenHandler();
+            var jwtToken = handler.ReadJwtToken(token);
+            
+            var identity = new ClaimsIdentity(jwtToken.Claims, "jwt", ClaimTypes.Name, ClaimTypes.Role);
+            var user = new ClaimsPrincipal(identity);
+            
+            Console.WriteLine($"Token valid, authenticated as: {identity.Name}");
+            
+            return new AuthenticationState(user);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error parsing JWT token: {ex.Message}");
+            // Invalid token, return unauthenticated state
+            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+        }
     }
 
     public void NotifyAuthenticationStateChanged()

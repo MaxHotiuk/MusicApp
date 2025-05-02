@@ -2,36 +2,74 @@
 @using MusicApp.Client.Interfaces
 @inject IAuthService AuthService
 @inject NavigationManager NavigationManager
-@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16 d-flex justify-center align-center">
-    <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16 text-center">
+    @if (loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.h5" Class="mt-4">Processing authentication...</MudText>
+    }
+    else if (error)
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">@errorMessage</MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Link="/">Return to Home</MudButton>
+    }
+    else
+    {
+        <MudText Typo="Typo.h4" Class="mb-4">Authentication Successful!</MudText>
+        <MudText Class="mb-8">You have successfully connected your Spotify account.</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Link="/">Continue to App</MudButton>
+    }
 </MudContainer>
 
 @code {
-    [Parameter]
-    [SupplyParameterFromQuery]
-    public string? Token { get; set; }
+    private bool loading = true;
+    private bool error = false;
+    private string errorMessage = "";
 
     protected override async Task OnInitializedAsync()
     {
-        if (string.IsNullOrEmpty(Token))
+        try
         {
-            Snackbar.Add("Authentication failed. Missing token.", Severity.Error);
-            NavigationManager.NavigateTo("/login");
-            return;
-        }
+            // Get token from URL (query parameter)
+            var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var token = queryParams["token"];
 
-        var success = await AuthService.HandleSpotifyCallbackAsync(Token);
-        if (success)
-        {
-            Snackbar.Add("Successfully connected to Spotify!", Severity.Success);
-            NavigationManager.NavigateTo("/");
+            Console.WriteLine($"Received token from URL: {token?.Substring(0, 10)}...");
+
+            if (string.IsNullOrEmpty(token))
+            {
+                error = true;
+                errorMessage = "No authentication token received.";
+                return;
+            }
+
+            var success = await AuthService.HandleSpotifyCallbackAsync(token);
+            if (!success)
+            {
+                error = true;
+                errorMessage = "Failed to process authentication token.";
+                return;
+            }
+
+            // Check if we're actually authenticated now
+            var isAuthenticated = await AuthService.IsUserAuthenticated();
+            Console.WriteLine($"IsUserAuthenticated check returned: {isAuthenticated}");
+
+            // Successfully authenticated
+            loading = false;
         }
-        else
+        catch (Exception ex)
         {
-            Snackbar.Add("Failed to process authentication.", Severity.Error);
-            NavigationManager.NavigateTo("/login");
+            Console.WriteLine($"Error in callback: {ex.Message}");
+            error = true;
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
         }
     }
 }
