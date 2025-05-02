@@ -1,0 +1,49 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using MusicApp.Client.Interfaces
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<AuthorizeView>
+    <Authorized>
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            <MudMenuItem>Hello, @context.User.Identity!.Name!</MudMenuItem>
+            <MudDivider />
+            <MudMenuItem OnClick="@BeginSignOut">Logout</MudMenuItem>
+        </MudMenu>
+    </Authorized>
+    <NotAuthorized>
+        <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="@Login">Login</MudButton>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    // Changed to use direct method reference without lambda
+    public async Task Login()
+    {
+        try 
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "Login button clicked");
+            NavigationManager.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Login error: " + ex.Message);
+        }
+    }
+
+    private async Task BeginSignOut()
+    {
+        try 
+        {
+            await JSRuntime.InvokeVoidAsync("console.log", "Logout button clicked");
+            await AuthService.Logout();
+            NavigationManager.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Logout error: " + ex.Message);
+        }
+    }
+}

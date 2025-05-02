@@ -1,0 +1,85 @@
+@page "/playlists"
+@using Microsoft.AspNetCore.Authorization
+@using MusicApp.Client.Interfaces
+@using MusicApp.Shared.Models
+@attribute [Authorize]
+@inject ISpotifyClientService SpotifyService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JSRuntime
+
+<MudContainer Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Your Spotify Playlists</MudText>
+    
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+    }
+    else if (_playlists != null && _playlists.Count > 0)
+    {
+        <MudGrid>
+            @foreach (var playlist in _playlists)
+            {
+                <MudItem xs="12" sm="6" md="4" lg="3">
+                    <MudCard Class="h-100">
+                        @if (playlist.Images != null && playlist.Images.Count > 0)
+                        {
+                            <MudCardMedia Image="@playlist.Images[0].Url" Height="200" />
+                        }
+                        else
+                        {
+                            <MudCardMedia Style="background-color: #1DB954; height: 200px;" />
+                        }
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6" Class="mud-text-ellipsis">@playlist.Name</MudText>
+                            @if (!string.IsNullOrEmpty(playlist.Description))
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-ellipsis">@playlist.Description</MudText>
+                            }
+                            <MudText Typo="Typo.body2" Color="Color.Primary">@playlist.Tracks?.Total tracks</MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton FullWidth="true" 
+                                      Variant="Variant.Text" 
+                                      Color="Color.Primary" 
+                                      OnClick="@(() => OpenSpotifyPlaylist(playlist.Id!))">
+                                Open in Spotify
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info">No playlists found in your Spotify account.</MudAlert>
+    }
+</MudContainer>
+
+@code {
+    private List<SpotifyPlaylistDto>? _playlists;
+    private bool _isLoading = true;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _playlists = await SpotifyService.GetUserPlaylistsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading playlists: {ex.Message}", Severity.Error);
+            _playlists = new List<SpotifyPlaylistDto>();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+    
+    private void OpenSpotifyPlaylist(string playlistId)
+    {
+        JSRuntime.InvokeVoidAsync("open", $"https://open.spotify.com/playlist/{playlistId}", "_blank");
+    }
+}

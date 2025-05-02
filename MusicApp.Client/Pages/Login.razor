@@ -1,0 +1,58 @@
+@page "/login"
+@using MusicApp.Client.Interfaces
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudCard Elevation="3" Class="rounded-lg">
+        <MudCardHeader>
+            <MudText Typo="Typo.h5" Class="ml-2">Sign in with Spotify</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <MudText Typo="Typo.body1" Class="mb-4">
+                Connect your Spotify account to access your playlists and music preferences.
+            </MudText>
+            
+            <MudButton Variant="Variant.Filled" 
+                      Color="Color.Success" 
+                      FullWidth="true" 
+                      OnClick="LoginWithSpotify" 
+                      StartIcon="@Icons.Material.Filled.MusicNote"
+                      Size="Size.Large"
+                      Disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                    <MudText Class="ms-2">Connecting...</MudText>
+                }
+                else
+                {
+                    <MudText>Continue with Spotify</MudText>
+                }
+            </MudButton>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    private bool _isLoading = false;
+
+    private async Task LoginWithSpotify()
+    {
+        try
+        {
+            _isLoading = true;
+            var url = await AuthService.GetSpotifyLoginUrlAsync();
+            NavigationManager.NavigateTo(url);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error connecting to Spotify: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

@@ -1,0 +1,37 @@
+@page "/auth/spotify-success"
+@using MusicApp.Client.Interfaces
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16 d-flex justify-center align-center">
+    <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+</MudContainer>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? Token { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(Token))
+        {
+            Snackbar.Add("Authentication failed. Missing token.", Severity.Error);
+            NavigationManager.NavigateTo("/login");
+            return;
+        }
+
+        var success = await AuthService.HandleSpotifyCallbackAsync(Token);
+        if (success)
+        {
+            Snackbar.Add("Successfully connected to Spotify!", Severity.Success);
+            NavigationManager.NavigateTo("/");
+        }
+        else
+        {
+            Snackbar.Add("Failed to process authentication.", Severity.Error);
+            NavigationManager.NavigateTo("/login");
+        }
+    }
+}
