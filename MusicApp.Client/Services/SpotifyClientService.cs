@@ -34,4 +34,13 @@ public class SpotifyClientService : ISpotifyClientService
         
         return await _httpClient.GetFromJsonAsync<List<SpotifyPlaylistDto>>("api/spotify/playlists") ?? throw new InvalidOperationException("Failed to retrieve user playlists.");
     }
+
+    public async Task<List<SpotifyTrackDto>> GetPlaylistRecommendationsAsync(string playlistId)
+    {
+        var token = await _authService.GetToken();
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        
+        return await _httpClient.GetFromJsonAsync<List<SpotifyTrackDto>>($"api/spotify/playlists/{playlistId}/recommendations") ?? 
+            throw new InvalidOperationException("Failed to retrieve recommendations.");
+    }
 }

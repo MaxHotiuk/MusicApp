@@ -140,5 +140,161 @@ namespace MusicApp.Services
             
             return playlists;
         }
+
+        public async Task<List<SpotifyTrackDto>> GetPlaylistTracksAsync(string accessToken, string playlistId)
+        {
+            var tracks = new List<SpotifyTrackDto>();
+            string nextUrl = $"{_apiBaseUrl}/playlists/{playlistId}/tracks?limit=100";
+            
+            while (!string.IsNullOrEmpty(nextUrl))
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, nextUrl);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                
+                var content = await response.Content.ReadAsStringAsync();
+                var tracksResponse = JsonSerializer.Deserialize<SpotifyPaginatedResponse<SpotifyPlaylistTrackDto>>(
+                    content, 
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                
+                // Extract track information from playlist track objects
+                if (tracksResponse?.Items != null)
+                {
+                    tracks.AddRange(tracksResponse.Items
+                        .Where(item => item.Track != null)
+                        .Select(item => item.Track!));
+                }
+                
+                nextUrl = tracksResponse?.Next ?? string.Empty;
+            }
+            
+            return tracks;
+        }
+
+        public async Task<List<SpotifyArtistDto>> GetArtistsByGenreAsync(string accessToken, string genre, int limit = 5)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/search?q=genre:{HttpUtility.UrlEncode(genre)}&type=artist&limit={limit}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            
+            var content = await response.Content.ReadAsStringAsync();
+            var searchResponse = JsonSerializer.Deserialize<SpotifySearchResponse>(
+                content, 
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+            
+            return searchResponse?.Artists?.Items ?? new List<SpotifyArtistDto>();
+        }
+
+        public async Task<List<SpotifyTrackDto>> GetArtistTopTracksAsync(string accessToken, string artistId, string market = "US")
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/artists/{artistId}/top-tracks?market={market}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            
+            var content = await response.Content.ReadAsStringAsync();
+            var topTracksResponse = JsonSerializer.Deserialize<SpotifyArtistTopTracksResponse>(
+                content, 
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+            
+            return topTracksResponse?.Tracks ?? new List<SpotifyTrackDto>();
+        }
+
+        public async Task<List<SpotifyTrackDto>> GetPlaylistRecommendationsAsync(string accessToken, string playlistId)
+        {
+            // Get all tracks from the playlist
+            var playlistTracks = await GetPlaylistTracksAsync(accessToken, playlistId);
+            
+            // Extract all genres from the artists
+            var genreCounts = new Dictionary<string, int>();
+            
+            foreach (var track in playlistTracks)
+            {
+                if (track.Artists != null)
+                {
+                    foreach (var artist in track.Artists)
+                    {
+                        if (artist == null || string.IsNullOrEmpty(artist.Id)) continue;
+                        
+                        // Get artist details to get genres
+                        try
+                        {
+                            var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/artists/{artist.Id}");
+                            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                            
+                            var response = await _httpClient.SendAsync(request);
+                            response.EnsureSuccessStatusCode();
+                            
+                            var content = await response.Content.ReadAsStringAsync();
+                            var artistDetails = JsonSerializer.Deserialize<SpotifyArtistDto>(
+                                content, 
+                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                            );
+                            
+                            if (artistDetails?.Genres != null)
+                            {
+                                foreach (var genre in artistDetails.Genres)
+                                {
+                                    if (!string.IsNullOrEmpty(genre))
+                                    {
+                                        if (genreCounts.ContainsKey(genre))
+                                            genreCounts[genre]++;
+                                        else
+                                            genreCounts[genre] = 1;
+                                    }
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // Continue with next artist if we can't get details for one
+                            continue;
+                        }
+                    }
+                }
+            }
+            
+            // Get top 5 most common genres
+            var topGenres = genreCounts
+                .OrderByDescending(g => g.Value)
+                .Take(5)
+                .Select(g => g.Key)
+                .ToList();
+            
+            // Create recommendations list
+            var recommendations = new List<SpotifyTrackDto>();
+            var processedArtists = new HashSet<string>();
+            
+            // For each genre, find one artist and get their top tracks
+            foreach (var genre in topGenres)
+            {
+                var artists = await GetArtistsByGenreAsync(accessToken, genre, 5);
+                
+                // Find an artist we haven't processed yet
+                var artist = artists.FirstOrDefault(a => !processedArtists.Contains(a.Id!));
+                if (artist != null && !string.IsNullOrEmpty(artist.Id))
+                {
+                    processedArtists.Add(artist.Id);
+                    var topTracks = await GetArtistTopTracksAsync(accessToken, artist.Id);
+                    
+                    // Add top 3 tracks to recommendations
+                    recommendations.AddRange(topTracks.Take(3));
+                }
+            }
+            
+            // Randomize and limit recommendations
+            return recommendations
+                .OrderBy(_ => Guid.NewGuid())
+                .Take(15)
+                .ToList();
+        }
     }
 }

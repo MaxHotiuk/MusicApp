@@ -9,5 +9,9 @@ namespace MusicApp.Interfaces
         Task<SpotifyTokenResponse> RefreshTokenAsync(string refreshToken);
         Task<SpotifyUserProfile> GetUserProfileAsync(string accessToken);
         Task<List<SpotifyPlaylistDto>> GetUserPlaylistsAsync(string accessToken);
+        Task<List<SpotifyTrackDto>> GetPlaylistTracksAsync(string accessToken, string playlistId);
+        Task<List<SpotifyArtistDto>> GetArtistsByGenreAsync(string accessToken, string genre, int limit = 5);
+        Task<List<SpotifyTrackDto>> GetArtistTopTracksAsync(string accessToken, string artistId, string market = "US");
+        Task<List<SpotifyTrackDto>> GetPlaylistRecommendationsAsync(string accessToken, string playlistId);
     }
 }

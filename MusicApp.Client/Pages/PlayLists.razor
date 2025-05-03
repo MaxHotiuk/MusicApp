@@ -38,11 +38,17 @@
                             <MudText Typo="Typo.body2" Color="Color.Primary">@playlist.Tracks?.Total tracks</MudText>
                         </MudCardContent>
                         <MudCardActions>
-                            <MudButton FullWidth="true" 
+                            <MudButton FullWidth="false" 
                                       Variant="Variant.Text" 
                                       Color="Color.Primary" 
                                       OnClick="@(() => OpenSpotifyPlaylist(playlist.Id!))">
                                 Open in Spotify
+                            </MudButton>
+                            <MudButton FullWidth="false" 
+                                      Variant="Variant.Filled" 
+                                      Color="Color.Secondary" 
+                                      OnClick="@(() => GetRecommendations(playlist.Id!))">
+                                Get Recommendations
                             </MudButton>
                         </MudCardActions>
                     </MudCard>
@@ -54,11 +60,81 @@
     {
         <MudAlert Severity="Severity.Info">No playlists found in your Spotify account.</MudAlert>
     }
+
+    @if (_recommendations != null && _recommendations.Count > 0)
+    {
+        <MudDivider Class="my-6" />
+        <MudText Typo="Typo.h4" Class="mb-4">Recommendations for You</MudText>
+        <MudPaper Elevation="3" Class="pa-4">
+            <MudList T="SpotifyTrackDto" Class="mb-0">
+                @foreach (var track in _recommendations)
+                {
+                    <MudListItem>
+                        <div class="d-flex align-center">
+                            @if (track.Album?.Images != null && track.Album.Images.Count > 0)
+                            {
+                                <MudAvatar Class="mr-3" Square="true" Size="Size.Large" Image="@track.Album.Images[0].Url" />
+                            }
+                            else
+                            {
+                                <MudAvatar Class="mr-3" Square="true" Size="Size.Large" Color="Color.Secondary">
+                                    <MudIcon Icon="@Icons.Material.Filled.MusicNote" />
+                                </MudAvatar>
+                            }
+                            <div>
+                                <MudText Typo="Typo.h6">@track.Name</MudText>
+                                <MudText Typo="Typo.body2">
+                                    @string.Join(", ", track.Artists?.Select(a => a.Name) ?? Array.Empty<string>())
+                                </MudText>
+                                <MudText Typo="Typo.caption">@track.Album?.Name</MudText>
+                            </div>
+                            <MudSpacer />
+                            @if (!string.IsNullOrEmpty(track.Uri))
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" 
+                                             Color="Color.Primary" 
+                                             OnClick="@(() => OpenSpotifyTrack(track.Uri))" 
+                                             Title="Play on Spotify" />
+                            }
+                            @if (track.ExternalUrls?.Spotify != null)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" 
+                                             Color="Color.Default" 
+                                             OnClick="@(() => JSRuntime.InvokeVoidAsync("open", track.ExternalUrls.Spotify, "_blank"))"
+                                             Title="Open in Spotify" />
+                            }
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+            <MudButton FullWidth="true" 
+                      Variant="Variant.Text" 
+                      Color="Color.Default" 
+                      OnClick="@ClearRecommendations" 
+                      Class="mt-3">
+                Clear Recommendations
+            </MudButton>
+        </MudPaper>
+    }
+    
+    <MudDialog @bind-IsVisible="_isLoadingRecommendations">
+        <TitleContent>
+            <MudText Typo="Typo.h6">
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                Getting Recommendations
+            </MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudText>Finding similar tracks based on the genres in your playlist...</MudText>
+        </DialogContent>
+    </MudDialog>
 </MudContainer>
 
 @code {
     private List<SpotifyPlaylistDto>? _playlists;
+    private List<SpotifyTrackDto>? _recommendations;
     private bool _isLoading = true;
+    private bool _isLoadingRecommendations = false;
     
     protected override async Task OnInitializedAsync()
     {
@@ -81,5 +157,42 @@
     private void OpenSpotifyPlaylist(string playlistId)
     {
         JSRuntime.InvokeVoidAsync("open", $"https://open.spotify.com/playlist/{playlistId}", "_blank");
+    }
+    
+    private void OpenSpotifyTrack(string trackUri)
+    {
+        JSRuntime.InvokeVoidAsync("open", trackUri, "_blank");
+    }
+    
+    private async Task GetRecommendations(string playlistId)
+    {
+        try
+        {
+            _isLoadingRecommendations = true;
+            _recommendations = await SpotifyService.GetPlaylistRecommendationsAsync(playlistId);
+            
+            if (_recommendations.Count == 0)
+            {
+                Snackbar.Add("No recommendations found for this playlist.", Severity.Info);
+            }
+            else
+            {
+                Snackbar.Add($"Found {_recommendations.Count} recommendations based on your playlist genres!", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error getting recommendations: {ex.Message}", Severity.Error);
+            _recommendations = new List<SpotifyTrackDto>();
+        }
+        finally
+        {
+            _isLoadingRecommendations = false;
+        }
+    }
+    
+    private void ClearRecommendations()
+    {
+        _recommendations = null;
     }
 }

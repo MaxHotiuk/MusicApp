@@ -19,6 +19,11 @@ namespace MusicApp.Shared.Models
         [JsonPropertyName("refresh_token")]
         public string? RefreshToken { get; set; }
     }
+    public class SpotifyExternalUrlsDto
+    {
+        [JsonPropertyName("spotify")]
+        public string? Spotify { get; set; }
+    }
 
     public class SpotifyUserProfile
     {
@@ -98,5 +103,74 @@ namespace MusicApp.Shared.Models
     public class SpotifyLoginUrlResponse
     {
         public string? Url { get; set; }
+    }
+
+    public class SpotifyPlaylistTrackDto
+    {
+        public SpotifyTrackDto? Track { get; set; }
+        public DateTime? AddedAt { get; set; }
+    }
+
+    public class SpotifyTrackDto
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public int? Popularity { get; set; }
+        public List<SpotifyArtistDto>? Artists { get; set; }
+        public SpotifyAlbumDto? Album { get; set; }
+        public SpotifyTrackFeaturesDto? Features { get; set; }
+        public string? PreviewUrl { get; set; }
+        public int? DurationMs { get; set; }
+        public string? Uri { get; set; }
+        public SpotifyExternalUrlsDto? ExternalUrls { get; set; }
+    }
+
+    public class SpotifyArtistDto
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public List<string>? Genres { get; set; }
+        public int? Popularity { get; set; }
+        public List<SpotifyImage>? Images { get; set; }
+        public SpotifyExternalUrlsDto? ExternalUrls { get; set; }
+    }
+
+    public class SpotifyAlbumDto
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? AlbumType { get; set; }
+        public string? ReleaseDate { get; set; }
+        public string? ReleaseDatePrecision { get; set; }
+        public List<SpotifyImage>? Images { get; set; }
+        public List<SpotifyArtistDto>? Artists { get; set; }
+        public SpotifyExternalUrlsDto? ExternalUrls { get; set; }
+    }
+
+    public class SpotifyTrackFeaturesDto
+    {
+        public float? Danceability { get; set; }
+        public float? Energy { get; set; }
+        public float? Speechiness { get; set; }
+        public float? Acousticness { get; set; }
+        public float? Instrumentalness { get; set; }
+        public float? Liveness { get; set; }
+        public float? Valence { get; set; }
+        public float? Tempo { get; set; }
+        public int? TimeSignature { get; set; }
+        public int? Key { get; set; }
+        public int? Mode { get; set; }
+    }
+
+    public class SpotifySearchResponse
+    {
+        public SpotifyPaginatedResponse<SpotifyArtistDto>? Artists { get; set; }
+        public SpotifyPaginatedResponse<SpotifyTrackDto>? Tracks { get; set; }
+        public SpotifyPaginatedResponse<SpotifyAlbumDto>? Albums { get; set; }
+    }
+
+    public class SpotifyArtistTopTracksResponse
+    {
+        public List<SpotifyTrackDto>? Tracks { get; set; }
     }
 }
