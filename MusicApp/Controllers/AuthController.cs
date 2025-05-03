@@ -52,7 +52,7 @@ namespace MusicApp.Controllers
         }
 
         [HttpGet("spotify-callback")]
-        public async Task<IActionResult> SpotifyCallback([FromQuery] string code, [FromQuery] string state, [FromQuery] string error = null)
+        public async Task<IActionResult> SpotifyCallback([FromQuery] string code, [FromQuery] string state, [FromQuery] string? error = null)
         {
             _logger.LogInformation($"Received callback with state: {state}");
             
@@ -84,10 +84,10 @@ namespace MusicApp.Controllers
                 var redirectUri = _configuration["Spotify:RedirectUri"];
                 _logger.LogInformation($"Using redirect URI: {redirectUri}");
                 
-                var tokenResponse = await _spotifyService.ExchangeCodeForTokenAsync(code, redirectUri);
+                var tokenResponse = await _spotifyService.ExchangeCodeForTokenAsync(code, redirectUri!);
                 
                 // Get user profile from Spotify
-                var userProfile = await _spotifyService.GetUserProfileAsync(tokenResponse.AccessToken);
+                var userProfile = await _spotifyService.GetUserProfileAsync(tokenResponse.AccessToken!);
                 
                 // Find or create user in database
                 var user = await _context.Users.FirstOrDefaultAsync(u => u.SpotifyId == userProfile.Id);
@@ -97,9 +97,9 @@ namespace MusicApp.Controllers
                     user = new User
                     {
                         Id = Guid.NewGuid(),
-                        SpotifyId = userProfile.Id,
-                        Email = userProfile.Email,
-                        DisplayName = userProfile.DisplayName
+                        SpotifyId = userProfile.Id!,
+                        Email = userProfile.Email!,
+                        DisplayName = userProfile.DisplayName!
                     };
                     
                     _context.Users.Add(user);
@@ -143,7 +143,7 @@ namespace MusicApp.Controllers
                 
             try
             {
-                var tokenResponse = await _spotifyService.RefreshTokenAsync(user.SpotifyRefreshToken);
+                var tokenResponse = await _spotifyService.RefreshTokenAsync(user.SpotifyRefreshToken!);
                 
                 // Update user tokens
                 user.SpotifyAccessToken = tokenResponse.AccessToken;
@@ -185,7 +185,7 @@ namespace MusicApp.Controllers
                 new Claim("spotify_id", user.SpotifyId)
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSecurityKey"]));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSecurityKey"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var expiry = DateTime.Now.AddDays(7);
 
@@ -203,6 +203,6 @@ namespace MusicApp.Controllers
 
     public class RefreshTokenRequest
     {
-        public string RefreshToken { get; set; }
+        public string? RefreshToken { get; set; }
     }
 }

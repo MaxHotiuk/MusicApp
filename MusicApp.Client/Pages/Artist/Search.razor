@@ -23,18 +23,16 @@
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Search"
                           OnAdornmentClick="SearchArtists"
-                          OnKeyDown="@(e => { if (e.Key == "Enter") SearchArtists(); })"
+                          OnKeyDown="@(async e => { if (e.Key == "Enter") await SearchArtists(); })"
                           Variant="Variant.Outlined"
                           FullWidth="true">
-                <Adornment>
-                    <MudButton Variant="Variant.Filled" 
-                              Color="Color.Primary" 
-                              OnClick="SearchArtists"
-                              StartIcon="@Icons.Material.Filled.Search"
-                              Class="ml-2">
-                        Search
-                    </MudButton>
-                </Adornment>
+                <MudButton Variant="Variant.Filled" 
+                            Color="Color.Primary" 
+                            OnClick="SearchArtists"
+                            StartIcon="@Icons.Material.Filled.Search"
+                            Class="ml-2">
+                    Search
+                </MudButton>
             </MudTextField>
         </MudItem>
     </MudGrid>
@@ -52,7 +50,7 @@
             {
                 <MudItem xs="12" sm="6" md="4" lg="3">
                     <MudCard Elevation="2" Class="artist-card h-100" Style="transition: transform 0.2s; position: relative;">
-                        <div class="artist-hover-overlay" @onclick="() => ViewArtistCollaborations(artist.Id)">
+                        <div class="artist-hover-overlay" @onclick="() => ViewArtistCollaborations(artist.Id!)">
                             @if (artist.Images != null && artist.Images.Any())
                             {
                                 <MudCardMedia Image="@artist.Images.First().Url" Height="200" />
@@ -95,12 +93,12 @@
                             <MudButton StartIcon="@Icons.Material.Filled.Person" 
                                       Variant="Variant.Text" 
                                       Color="Color.Primary" 
-                                      OnClick="() => ViewArtistCollaborations(artist.Id)">
+                                      OnClick="() => ViewArtistCollaborations(artist.Id!)">
                                 View
                             </MudButton>
                             <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" 
                                          Color="Color.Default" 
-                                         OnClick="() => OpenArtistInSpotify(artist.Id)" 
+                                         OnClick="() => OpenArtistInSpotify(artist.Id!)" 
                                          Title="Open in Spotify" />
                         </MudCardActions>
                     </MudCard>
@@ -182,14 +180,14 @@
     private bool _isFirstSearch = true;
     private System.Threading.Timer? _debounceTimer;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         // Check if there is a query parameter
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
         if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("q", out var query))
         {
             _searchQuery = query.ToString();
-            SearchArtists();
+            await SearchArtists();
         }
     }
 
