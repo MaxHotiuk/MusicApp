@@ -1,0 +1,87 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@using MusicApp.Client.Interfaces
+@using MusicApp.Shared.Models
+@attribute [Authorize]
+@inject ISpotifyClientService SpotifyService
+@inject ISnackbar Snackbar
+
+<MudContainer Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Your Profile</MudText>
+    
+    @if (_isLoading)
+    {
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+    }
+    else if (_profile != null)
+    {
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudCard>
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Profile Information</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (_profile.Images != null && _profile.Images.Count > 0)
+                        {
+                            <div class="d-flex justify-center mb-4">
+                                <MudAvatar Size="Size.Large" Style="height: 150px; width: 150px;">
+                                    <MudImage Src="@_profile.Images[0].Url" Alt="Profile Image" />
+                                </MudAvatar>
+                            </div>
+                        }
+                        
+                        <MudList T="string">
+                            <MudListItem>
+                                <MudText Typo="Typo.body1"><b>Display Name:</b> @_profile.DisplayName</MudText>
+                            </MudListItem>
+                            <MudListItem>
+                                <MudText Typo="Typo.body1"><b>Email:</b> @_profile.Email</MudText>
+                            </MudListItem>
+                            @if (!string.IsNullOrEmpty(_profile.Country))
+                            {
+                                <MudListItem>
+                                    <MudText Typo="Typo.body1"><b>Country:</b> @_profile.Country</MudText>
+                                </MudListItem>
+                            }
+                            @if (!string.IsNullOrEmpty(_profile.Product))
+                            {
+                                <MudListItem>
+                                    <MudText Typo="Typo.body1"><b>Spotify Plan:</b> @_profile.Product</MudText>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Error">Failed to load profile information</MudAlert>
+    }
+</MudContainer>
+
+@code {
+    private SpotifyUserProfile _profile;
+    private bool _isLoading = true;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _profile = await SpotifyService.GetUserProfileAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading profile: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

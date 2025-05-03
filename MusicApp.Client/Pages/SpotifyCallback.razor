@@ -1,0 +1,75 @@
+@page "/auth/spotify-success"
+@using MusicApp.Client.Interfaces
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16 text-center">
+    @if (loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.h5" Class="mt-4">Processing authentication...</MudText>
+    }
+    else if (error)
+    {
+        <MudAlert Severity="Severity.Error" Class="my-4">@errorMessage</MudAlert>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Link="/">Return to Home</MudButton>
+    }
+    else
+    {
+        <MudText Typo="Typo.h4" Class="mb-4">Authentication Successful!</MudText>
+        <MudText Class="mb-8">You have successfully connected your Spotify account.</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Link="/">Continue to App</MudButton>
+    }
+</MudContainer>
+
+@code {
+    private bool loading = true;
+    private bool error = false;
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Get token from URL (query parameter)
+            var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var queryParams = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var token = queryParams["token"];
+
+            Console.WriteLine($"Received token from URL: {token?.Substring(0, 10)}...");
+
+            if (string.IsNullOrEmpty(token))
+            {
+                error = true;
+                errorMessage = "No authentication token received.";
+                return;
+            }
+
+            var success = await AuthService.HandleSpotifyCallbackAsync(token);
+            if (!success)
+            {
+                error = true;
+                errorMessage = "Failed to process authentication token.";
+                return;
+            }
+
+            // Check if we're actually authenticated now
+            var isAuthenticated = await AuthService.IsUserAuthenticated();
+            Console.WriteLine($"IsUserAuthenticated check returned: {isAuthenticated}");
+
+            // Successfully authenticated
+            loading = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in callback: {ex.Message}");
+            error = true;
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

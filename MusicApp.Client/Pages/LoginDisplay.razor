@@ -1,0 +1,34 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using MusicApp.Client.Interfaces
+@inject IAuthService AuthService
+@inject NavigationManager NavigationManager
+
+<AuthorizeView>
+    <Authorized>
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" Direction="Direction.Bottom" OffsetY="true">
+            <MudText Typo="Typo.subtitle2" Class="px-4 py-2">
+                Hello, @context.User.Identity?.Name!
+            </MudText>
+            <MudDivider />
+            <MudMenuItem Href="/profile">Profile</MudMenuItem>
+            <MudMenuItem Href="/playlists">My Playlists</MudMenuItem>
+            <MudMenuItem OnClick="LogoutClick">Logout</MudMenuItem>
+        </MudMenu>
+    </Authorized>
+    <NotAuthorized>
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoginClick">Login</MudButton>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private async Task LogoutClick()
+    {
+        await AuthService.Logout();
+        NavigationManager.NavigateTo("/");
+    }
+
+    private void LoginClick()
+    {
+        NavigationManager.NavigateTo("/login");
+    }
+}

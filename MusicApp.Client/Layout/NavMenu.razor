@@ -1,4 +1,29 @@
-﻿<MudNavMenu>
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+﻿@using MusicApp.Client.Interfaces
+@using MusicApp.Client.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IAuthService AuthService
+
+<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
     <MudNavLink Href="mp3-editor" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MusicNote">MP3 Editor</MudNavLink>
+    <AuthorizeView>
+        <Authorized>
+            <MudNavLink Href="/profile" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Person">Profile</MudNavLink>
+            <MudNavLink Href="/playlists" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.List">Playlists</MudNavLink>
+            <MudNavLink Href="/logout" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Logout">Logout</MudNavLink>
+        </Authorized>
+        <NotAuthorized>
+            <MudNavLink Href="/login" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Login">Login</MudNavLink>
+        </NotAuthorized>
+    </AuthorizeView>
 </MudNavMenu>
+
+@code {
+    // This component doesn't need any special JS Interop handling
+    // because AuthorizeView already handles prerendering scenarios correctly
+    
+    public void Dispose()
+    {
+        // Clean up resources if needed
+    }
+}
