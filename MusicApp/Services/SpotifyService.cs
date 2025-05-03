@@ -210,38 +210,60 @@ namespace MusicApp.Services
 
         public async Task<List<SpotifyTrackDto>> GetPlaylistRecommendationsAsync(string accessToken, string playlistId)
         {
-            // Get all tracks from the playlist
+            // Get tracks from the playlist
             var playlistTracks = await GetPlaylistTracksAsync(accessToken, playlistId);
             
-            // Extract all genres from the artists
-            var genreCounts = new Dictionary<string, int>();
+            // Sample tracks if the playlist is large
+            var sampledTracks = playlistTracks.Count > 100 
+                ? playlistTracks.OrderBy(_ => Guid.NewGuid()).Take(100).ToList() 
+                : playlistTracks;
             
-            foreach (var track in playlistTracks)
+            // Extract unique artist IDs
+            var uniqueArtistIds = new HashSet<string>();
+            foreach (var track in sampledTracks)
             {
                 if (track.Artists != null)
                 {
                     foreach (var artist in track.Artists)
                     {
-                        if (artist == null || string.IsNullOrEmpty(artist.Id)) continue;
-                        
-                        // Get artist details to get genres
-                        try
+                        if (artist != null && !string.IsNullOrEmpty(artist.Id))
                         {
-                            var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/artists/{artist.Id}");
-                            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-                            
-                            var response = await _httpClient.SendAsync(request);
-                            response.EnsureSuccessStatusCode();
-                            
-                            var content = await response.Content.ReadAsStringAsync();
-                            var artistDetails = JsonSerializer.Deserialize<SpotifyArtistDto>(
-                                content, 
-                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                            );
-                            
-                            if (artistDetails?.Genres != null)
+                            uniqueArtistIds.Add(artist.Id);
+                        }
+                    }
+                }
+            }
+            
+            // Get artist details in batches of 50 (Spotify's limit for Get Several Artists endpoint)
+            var genreCounts = new Dictionary<string, int>();
+            var artistIds = uniqueArtistIds.ToList();
+            
+            for (int i = 0; i < artistIds.Count; i += 50)
+            {
+                var batchIds = artistIds.Skip(i).Take(50);
+                var idsParam = string.Join(",", batchIds);
+                
+                try
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/artists?ids={idsParam}");
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                    
+                    var response = await _httpClient.SendAsync(request);
+                    response.EnsureSuccessStatusCode();
+                    
+                    var content = await response.Content.ReadAsStringAsync();
+                    var artistsResponse = JsonSerializer.Deserialize<SpotifyMultipleArtistsResponse>(
+                        content, 
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    
+                    if (artistsResponse?.Artists != null)
+                    {
+                        foreach (var artist in artistsResponse.Artists)
+                        {
+                            if (artist?.Genres != null)
                             {
-                                foreach (var genre in artistDetails.Genres)
+                                foreach (var genre in artist.Genres)
                                 {
                                     if (!string.IsNullOrEmpty(genre))
                                     {
@@ -253,12 +275,12 @@ namespace MusicApp.Services
                                 }
                             }
                         }
-                        catch
-                        {
-                            // Continue with next artist if we can't get details for one
-                            continue;
-                        }
                     }
+                }
+                catch
+                {
+                    // Continue with next batch if we can't get details for one batch
+                    continue;
                 }
             }
             
@@ -273,28 +295,165 @@ namespace MusicApp.Services
             var recommendations = new List<SpotifyTrackDto>();
             var processedArtists = new HashSet<string>();
             
-            // For each genre, find one artist and get their top tracks
+            // For each genre, find artists and get their top tracks
             foreach (var genre in topGenres)
             {
-                var artists = await GetArtistsByGenreAsync(accessToken, genre, 5);
+                var artists = await GetArtistsByGenreAsync(accessToken, genre, 3);
                 
-                // Find an artist we haven't processed yet
-                var artist = artists.FirstOrDefault(a => !processedArtists.Contains(a.Id!));
-                if (artist != null && !string.IsNullOrEmpty(artist.Id))
+                // Find artists we haven't processed yet
+                foreach (var artist in artists)
                 {
-                    processedArtists.Add(artist.Id);
-                    var topTracks = await GetArtistTopTracksAsync(accessToken, artist.Id);
-                    
-                    // Add top 3 tracks to recommendations
-                    recommendations.AddRange(topTracks.Take(3));
+                    if (artist != null && !string.IsNullOrEmpty(artist.Id) && !processedArtists.Contains(artist.Id))
+                    {
+                        processedArtists.Add(artist.Id);
+                        var topTracks = await GetArtistTopTracksAsync(accessToken, artist.Id);
+                        
+                        // Add top tracks to recommendations
+                        recommendations.AddRange(topTracks.Take(2));
+                        
+                        // Break after processing one artist per genre to limit API calls
+                        break;
+                    }
                 }
             }
             
             // Randomize and limit recommendations
-            return recommendations
+            var finalRecommendations = recommendations
                 .OrderBy(_ => Guid.NewGuid())
                 .Take(15)
                 .ToList();
+                
+            // Make sure all tracks have album artwork data
+            await EnsureTrackAlbumImagesAsync(accessToken, finalRecommendations);
+                
+            return finalRecommendations;
+        }
+        
+        // New method to ensure tracks have album images
+        private async Task EnsureTrackAlbumImagesAsync(string accessToken, List<SpotifyTrackDto> tracks)
+        {
+            var tracksMissingAlbumImages = tracks
+                .Where(t => t.Album?.Images == null || !t.Album.Images.Any())
+                .ToList();
+                
+            if (!tracksMissingAlbumImages.Any())
+                return; // All tracks have images, nothing to do
+                
+            // Get album IDs that need image data
+            var albumIds = tracksMissingAlbumImages
+                .Where(t => t.Album != null && !string.IsNullOrEmpty(t.Album.Id))
+                .Select(t => t.Album!.Id!)
+                .Distinct()
+                .ToList();
+                
+            if (!albumIds.Any())
+                return; // No valid album IDs to fetch
+                
+            // Process in batches of 20 (Spotify's limit for Get Multiple Albums endpoint)
+            for (int i = 0; i < albumIds.Count; i += 20)
+            {
+                var batchIds = albumIds.Skip(i).Take(20);
+                var idsParam = string.Join(",", batchIds);
+                
+                try
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/albums?ids={idsParam}");
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                    
+                    var response = await _httpClient.SendAsync(request);
+                    response.EnsureSuccessStatusCode();
+                    
+                    var content = await response.Content.ReadAsStringAsync();
+                    var albumsResponse = JsonSerializer.Deserialize<SpotifyMultipleAlbumsResponse>(
+                        content, 
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    
+                    if (albumsResponse?.Albums != null)
+                    {
+                        // Create lookup for faster access
+                        var albumLookup = albumsResponse.Albums
+                            .Where(a => a != null && !string.IsNullOrEmpty(a.Id))
+                            .ToDictionary(a => a.Id!);
+                            
+                        // Update tracks with album data
+                        foreach (var track in tracksMissingAlbumImages)
+                        {
+                            if (track.Album != null && !string.IsNullOrEmpty(track.Album.Id) && 
+                                albumLookup.TryGetValue(track.Album.Id, out var albumDetails))
+                            {
+                                track.Album.Images = albumDetails.Images;
+                                track.Album.Name = albumDetails.Name;
+                                track.Album.ReleaseDate = albumDetails.ReleaseDate;
+                            }
+                            else if (track.Album != null && (track.Album.Images == null || !track.Album.Images.Any()))
+                            {
+                                // Provide default image if we couldn't get album data
+                                track.Album.Images = new List<SpotifyImage> {
+                                    new SpotifyImage { 
+                                        Url = "/images/default-album.png",
+                                        Height = 300,
+                                        Width = 300
+                                    }
+                                };
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Continue with next batch if we can't get details for one batch
+                    continue;
+                }
+            }
+            
+            // Ensure all tracks have at least a default image
+            foreach (var track in tracks)
+            {
+                if (track.Album == null)
+                {
+                    track.Album = new SpotifyAlbumDto { 
+                        Name = "Unknown Album",
+                        Images = new List<SpotifyImage> {
+                            new SpotifyImage { 
+                                Url = "/images/default-album.png",
+                                Height = 300,
+                                Width = 300
+                            }
+                        }
+                    };
+                }
+                else if (track.Album.Images == null || !track.Album.Images.Any())
+                {
+                    track.Album.Images = new List<SpotifyImage> {
+                        new SpotifyImage { 
+                            Url = "/images/default-album.png",
+                            Height = 300,
+                            Width = 300
+                        }
+                    };
+                }
+                
+                // Ensure track has artists data
+                if (track.Artists == null || !track.Artists.Any())
+                {
+                    track.Artists = new List<SpotifyArtistDto> {
+                        new SpotifyArtistDto { Name = "Unknown Artist" }
+                    };
+                }
+            }
+        }
+
+        // Add this class to support the new batched artist request
+        public class SpotifyMultipleArtistsResponse
+        {
+            public List<SpotifyArtistDto>? Artists { get; set; }
+        }
+        
+        // Add this class to support the multiple albums request
+        public class SpotifyMultipleAlbumsResponse
+        {
+            public List<SpotifyAlbumDto>? Albums { get; set; }
         }
     }
 }
