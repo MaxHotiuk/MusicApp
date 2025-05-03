@@ -218,4 +218,93 @@ public class SpotifyClientService : ISpotifyClientService
         var storedRecommendationsJson = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", $"spotify_recommendations_{playlistId}");
         return !string.IsNullOrEmpty(storedRecommendationsJson);
     }
+
+    public async Task<List<SpotifyArtistDto>> SearchArtistsAsync(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return new List<SpotifyArtistDto>();
+        
+        // Check if we have cached results
+        var cacheKey = $"artist_search_{query.ToLower()}";
+        var cachedResults = await _jsRuntime.InvokeAsync<string>("sessionStorage.getItem", cacheKey);
+        
+        if (!string.IsNullOrEmpty(cachedResults))
+        {
+            try
+            {
+                var cachedArtists = JsonSerializer.Deserialize<List<SpotifyArtistDto>>(cachedResults,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    
+                if (cachedArtists != null && cachedArtists.Count > 0)
+                    return cachedArtists;
+            }
+            catch
+            {
+                // Failed to deserialize, continue to fetch fresh data
+            }
+        }
+        
+        // Get token and set authorization header
+        var token = await _authService.GetToken();
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        
+        // Call the API endpoint
+        var encodedQuery = Uri.EscapeDataString(query);
+        var artists = await _httpClient.GetFromJsonAsync<List<SpotifyArtistDto>>($"api/spotify/search/artists?query={encodedQuery}")
+            ?? new List<SpotifyArtistDto>();
+        
+        // Cache the results
+        if (artists.Count > 0)
+        {
+            await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", 
+                cacheKey, 
+                JsonSerializer.Serialize(artists));
+        }
+        
+        return artists;
+    }
+
+    public async Task<List<dynamic>> GetRelatedArtistsAsync(string artistId)
+    {
+        if (string.IsNullOrWhiteSpace(artistId))
+            return new List<dynamic>();
+        
+        // Check if we have cached results
+        var cacheKey = $"related_artists_{artistId}";
+        var cachedResults = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", cacheKey);
+        
+        if (!string.IsNullOrEmpty(cachedResults))
+        {
+            try
+            {
+                var cachedArtists = JsonSerializer.Deserialize<List<dynamic>>(cachedResults,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    
+                if (cachedArtists != null && cachedArtists.Count > 0)
+                    return cachedArtists;
+            }
+            catch
+            {
+                // Failed to deserialize, continue to fetch fresh data
+            }
+        }
+        
+        // Get token and set authorization header
+        var token = await _authService.GetToken();
+        _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        
+        // Call the API endpoint
+        var relatedArtists = await _httpClient.GetFromJsonAsync<List<dynamic>>($"api/spotify/artists/{artistId}/related")
+            ?? new List<dynamic>();
+        
+        // Cache the results
+        if (relatedArtists.Count > 0)
+        {
+            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", 
+                cacheKey, 
+                JsonSerializer.Serialize(relatedArtists));
+        }
+        
+        return relatedArtists;
+    }
 }

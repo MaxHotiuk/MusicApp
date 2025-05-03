@@ -132,7 +132,7 @@ namespace MusicApp.Shared.Models
         public List<string>? Genres { get; set; }
         public int? Popularity { get; set; }
         public List<SpotifyImage>? Images { get; set; }
-        public SpotifyExternalUrlsDto? ExternalUrls { get; set; }
+        public Dictionary<string, string>? ExternalUrls { get; set; }
     }
 
     public class SpotifyAlbumDto
@@ -145,6 +145,12 @@ namespace MusicApp.Shared.Models
         public List<SpotifyImage>? Images { get; set; }
         public List<SpotifyArtistDto>? Artists { get; set; }
         public SpotifyExternalUrlsDto? ExternalUrls { get; set; }
+        public SpotifyTracksResponse? Tracks { get; set; }
+        
+        public class SpotifyTracksResponse
+        {
+            public List<SpotifyTrackDto>? Items { get; set; }
+        }
     }
 
     public class SpotifyTrackFeaturesDto
@@ -172,5 +178,38 @@ namespace MusicApp.Shared.Models
     public class SpotifyArtistTopTracksResponse
     {
         public List<SpotifyTrackDto>? Tracks { get; set; }
+    }
+
+    public class ArtistCollaborationNetwork
+    {
+        public List<ArtistNode> Nodes { get; set; } = new List<ArtistNode>();
+        public List<ArtistCollaboration> Links { get; set; } = new List<ArtistCollaboration>();
+    }
+
+    public class ArtistNode
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public List<string> Genres { get; set; } = new List<string>();
+        public string ImageUrl { get; set; } = string.Empty;
+        public int Popularity { get; set; }
+        public int Group { get; set; } // For visualization grouping
+    }
+
+    public class ArtistCollaboration
+    {
+        public string Source { get; set; } = string.Empty;
+        public string Target { get; set; } = string.Empty;
+        public int Weight { get; set; } = 1; // Number of collaborations
+        public List<string> Tracks { get; set; } = new List<string>(); // Track names they collaborated on
+    }
+
+    public class RelatedArtistDto
+    {
+        public string ArtistId { get; set; } = string.Empty;
+        public string ArtistName { get; set; } = string.Empty;
+        public string TrackName { get; set; } = string.Empty;
+        public string? TrackURL { get; set; }
+        public string TrackLink { get; set; } = string.Empty;
     }
 }
