@@ -11,4 +11,5 @@ public interface ISpotifyClientService
     Task ClearStoredRecommendations(string playlistId);
     Task<bool> HasStoredRecommendations(string playlistId);
     Task<List<SpotifyArtistDto>> SearchArtistsAsync(string query);
+    Task<List<dynamic>> GetRelatedArtistsAsync(string artistId);
 }

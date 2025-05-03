@@ -290,5 +290,71 @@ namespace MusicApp.Controllers
                 return BadRequest($"Error searching for artists: {ex.Message}");
             }
         }
+
+        [HttpGet("artists/{artistId}/related")]
+        public async Task<IActionResult> GetRelatedArtists(string artistId)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
+                return Unauthorized();
+
+            var user = await _context.Users.FindAsync(userGuid);
+            if (user == null)
+                return NotFound("User not found");
+
+            // Check if token is expired, refresh if needed
+            if (user.SpotifyTokenExpiry <= DateTime.UtcNow)
+            {
+                try
+                {
+                    var tokenResponse = await _spotifyService.RefreshTokenAsync(user.SpotifyRefreshToken!);
+                    user.SpotifyAccessToken = tokenResponse.AccessToken;
+                    if (!string.IsNullOrEmpty(tokenResponse.RefreshToken))
+                        user.SpotifyRefreshToken = tokenResponse.RefreshToken;
+                    user.SpotifyTokenExpiry = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn);
+                    await _context.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    return Unauthorized($"Failed to refresh token: {ex.Message}");
+                }
+            }
+
+            try
+            {
+                var relatedArtists = await _spotifyService.GetRelatedArtistsAsync(user.SpotifyAccessToken!, artistId);
+                
+                // Get full artist information for the related artists
+                if (relatedArtists.Any())
+                {
+                    var artistIds = relatedArtists.Select(a => a.ArtistId).Distinct().ToList();
+                    var artistDetails = await _spotifyService.GetArtistsDataAsync(user.SpotifyAccessToken!, artistIds);
+                    
+                    // Enrich related artists with additional artist information
+                    var result = relatedArtists.Select(ra => {
+                        var details = artistDetails.FirstOrDefault(ad => ad.Id == ra.ArtistId);
+                        return new 
+                        {
+                            ra.ArtistId,
+                            ra.ArtistName,
+                            ra.TrackName,
+                            ra.TrackURL,
+                            ra.TrackLink,
+                            Popularity = details?.Popularity ?? 0,
+                            Image = details?.Images?.FirstOrDefault()?.Url,
+                            Genres = details?.Genres
+                        };
+                    }).ToList();
+                    
+                    return Ok(result);
+                }
+                
+                return Ok(relatedArtists);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error retrieving related artists: {ex.Message}");
+            }
+        }
     }
 }

@@ -14,5 +14,8 @@ namespace MusicApp.Interfaces
         Task<List<SpotifyTrackDto>> GetArtistTopTracksAsync(string accessToken, string artistId, string market = "US");
         Task<List<SpotifyTrackDto>> GetPlaylistRecommendationsAsync(string accessToken, string playlistId);
         Task<List<SpotifyArtistDto>> SearchArtistsAsync(string accessToken, string query);
+        Task<List<string>> GetArtistAlbumsAsync(string accessToken, string artistId);
+        Task<List<RelatedArtistDto>> GetRelatedArtistsAsync(string accessToken, string artistId);
+        Task<List<SpotifyArtistDto>> GetArtistsDataAsync(string accessToken, List<string> artistIds);
     }
 }

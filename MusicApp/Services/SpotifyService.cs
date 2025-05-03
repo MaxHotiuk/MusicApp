@@ -503,6 +503,219 @@ namespace MusicApp.Services
             }
         }
 
+        public async Task<List<string>> GetArtistAlbumsAsync(string accessToken, string artistId)
+        {
+            var albumIds = new List<string>();
+            string nextUrl = $"{_apiBaseUrl}/artists/{artistId}/albums?limit=50&include_groups=album,single,appears_on";
+            
+            while (!string.IsNullOrEmpty(nextUrl))
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, nextUrl);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+                
+                var content = await response.Content.ReadAsStringAsync();
+                var albumsResponse = JsonSerializer.Deserialize<SpotifyPaginatedResponse<SpotifyAlbumDto>>(
+                    content, 
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+                
+                if (albumsResponse?.Items != null)
+                {
+                    albumIds.AddRange(albumsResponse.Items
+                        .Where(album => !string.IsNullOrEmpty(album.Id))
+                        .Select(album => album.Id!));
+                }
+                
+                nextUrl = albumsResponse?.Next ?? string.Empty;
+            }
+            
+            return albumIds;
+        }
+        
+        public async Task<List<RelatedArtistDto>> GetRelatedArtistsFromAlbumsAsync(
+            string accessToken, 
+            List<string> albumIds, 
+            string artistId)
+        {
+            var connectedArtists = new HashSet<string>();
+            var connectedArtistsData = new List<RelatedArtistDto>();
+            
+            // Process albums in batches of 20 (Spotify API limit)
+            for (int i = 0; i < albumIds.Count; i += 20)
+            {
+                var batch = albumIds.Skip(i).Take(20).ToList();
+                var idsParam = string.Join(",", batch);
+                
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/albums?ids={idsParam}");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                
+                try
+                {
+                    var response = await _httpClient.SendAsync(request);
+                    
+                    // Handle API rate limiting
+                    if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    {
+                        // Get retry-after header or default to 5 seconds
+                        int retryAfter = 5;
+                        if (response.Headers.RetryAfter?.Delta.HasValue == true)
+                        {
+                            retryAfter = (int)response.Headers.RetryAfter.Delta.Value.TotalSeconds;
+                        }
+                        
+                        await Task.Delay(retryAfter * 1000);
+                        i -= 20; // Retry this batch
+                        continue;
+                    }
+                    
+                    response.EnsureSuccessStatusCode();
+                    
+                    var content = await response.Content.ReadAsStringAsync();
+                    var albumsResponse = JsonSerializer.Deserialize<SpotifyMultipleAlbumsResponse>(
+                        content, 
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    
+                    if (albumsResponse?.Albums != null)
+                    {
+                        foreach (var album in albumsResponse.Albums)
+                        {
+                            if (album?.Tracks?.Items == null) continue;
+                            
+                            foreach (var track in album.Tracks.Items)
+                            {
+                                if (track?.Artists == null) continue;
+                                
+                                var artistIds = track.Artists.Select(a => a.Id).ToList();
+                                
+                                // Only process tracks where the requested artist is a collaborator
+                                if (artistIds.Count > 1 && artistIds.Contains(artistId))
+                                {
+                                    int index = 0;
+                                    foreach (var trackArtist in track.Artists)
+                                    {
+                                        var newArtistId = trackArtist.Id;
+                                        
+                                        // Skip the original artist and artists we've already found
+                                        if (newArtistId != artistId && !connectedArtists.Contains(newArtistId!))
+                                        {
+                                            // Create embed URL from track URL
+                                            string embedUrl = string.Empty;
+                                            if (!string.IsNullOrEmpty(track.ExternalUrls?.Spotify))
+                                            {
+                                                var trackParts = track.ExternalUrls.Spotify.Split("/track/");
+                                                if (trackParts.Length > 1)
+                                                {
+                                                    embedUrl = $"{trackParts[0]}/embed/track/{trackParts[1]}";
+                                                }
+                                            }
+                                            
+                                            connectedArtists.Add(newArtistId!);
+                                            connectedArtistsData.Add(new RelatedArtistDto
+                                            {
+                                                ArtistId = newArtistId!,
+                                                ArtistName = trackArtist.Name!,
+                                                TrackName = $"{track.Name} by {album.Artists?.FirstOrDefault()?.Name ?? "Unknown"}",
+                                                TrackURL = track.PreviewUrl,
+                                                TrackLink = embedUrl
+                                            });
+                                        }
+                                        index++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log exception and continue with next batch
+                    Console.WriteLine($"Error fetching albums: {ex.Message}");
+                    continue;
+                }
+            }
+            
+            return connectedArtistsData;
+        }
+
+        public async Task<List<SpotifyArtistDto>> GetArtistsDataAsync(string accessToken, List<string> artistIds)
+        {
+            var artistData = new List<SpotifyArtistDto>();
+            
+            // Process artists in batches of 50 (Spotify API limit)
+            for (int i = 0; i < artistIds.Count; i += 50)
+            {
+                var batch = artistIds.Skip(i).Take(50).ToList();
+                var idsParam = string.Join(",", batch);
+                
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/artists?ids={idsParam}");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+                
+                try
+                {
+                    var response = await _httpClient.SendAsync(request);
+                    
+                    // Handle API rate limiting
+                    if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                    {
+                        // Get retry-after header or default to 5 seconds
+                        int retryAfter = 5;
+                        if (response.Headers.RetryAfter?.Delta.HasValue == true)
+                        {
+                            retryAfter = (int)response.Headers.RetryAfter.Delta.Value.TotalSeconds;
+                        }
+                        
+                        await Task.Delay(retryAfter * 1000);
+                        i -= 50; // Retry this batch
+                        continue;
+                    }
+                    
+                    response.EnsureSuccessStatusCode();
+                    
+                    var content = await response.Content.ReadAsStringAsync();
+                    var artistsResponse = JsonSerializer.Deserialize<SpotifyMultipleArtistsResponse>(
+                        content, 
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    
+                    if (artistsResponse?.Artists != null)
+                    {
+                        artistData.AddRange(artistsResponse.Artists.Select(a => new SpotifyArtistDto
+                        {
+                            Id = a.Id,
+                            Name = a.Name,
+                            Popularity = a.Popularity,
+                            Images = a.Images,
+                            Genres = a.Genres,
+                            ExternalUrls = a.ExternalUrls
+                        }));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log exception and continue with next batch
+                    Console.WriteLine($"Error fetching artists: {ex.Message}");
+                    continue;
+                }
+            }
+            
+            return artistData;
+        }
+        
+        public async Task<List<RelatedArtistDto>> GetRelatedArtistsAsync(string accessToken, string artistId)
+        {
+            // Step 1: Get all albums for the artist
+            var albumIds = await GetArtistAlbumsAsync(accessToken, artistId);
+            
+            // Step 2: Process these albums to find collaborations
+            var relatedArtists = await GetRelatedArtistsFromAlbumsAsync(accessToken, albumIds, artistId);
+            
+            return relatedArtists;
+        }
+
         // Add this class to handle the Spotify search response
         public class SpotifySearchResponse
         {
