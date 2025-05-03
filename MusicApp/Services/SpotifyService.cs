@@ -188,7 +188,20 @@ namespace MusicApp.Services
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
             );
             
-            return searchResponse?.Artists?.Items ?? new List<SpotifyArtistDto>();
+            return searchResponse?.Artists?.Items?.Select(a => new SpotifyArtistDto
+            {
+                Id = a.Id,
+                Name = a.Name,
+                Popularity = a.Popularity,
+                Genres = a.Genres,
+                Images = a.Images?.Select(img => new SpotifyImage
+                {
+                    Url = img.Url,
+                    Height = img.Height,
+                    Width = img.Width
+                }).ToList() ?? new List<SpotifyImage>(),
+                ExternalUrls = a.ExternalUrls
+            }).ToList() ?? new List<SpotifyArtistDto>();
         }
 
         public async Task<List<SpotifyTrackDto>> GetArtistTopTracksAsync(string accessToken, string artistId, string market = "US")
@@ -442,6 +455,93 @@ namespace MusicApp.Services
                     };
                 }
             }
+        }
+
+        public async Task<List<SpotifyArtistDto>> SearchArtistsAsync(string accessToken, string query)
+        {
+            // Create an HttpClient with the appropriate authorization header
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+            
+            try
+            {
+                // Encode the query parameter properly
+                var encodedQuery = Uri.EscapeDataString(query);
+                var response = await httpClient.GetAsync($"https://api.spotify.com/v1/search?q={encodedQuery}&type=artist&limit=20");
+                response.EnsureSuccessStatusCode();
+                
+                var content = await response.Content.ReadAsStringAsync();
+                var searchResponse = System.Text.Json.JsonSerializer.Deserialize<SpotifySearchResponse>(content, 
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                
+                if (searchResponse?.Artists?.Items == null)
+                    return new List<SpotifyArtistDto>();
+                    
+                // Map the response to our DTO model
+                var artists = searchResponse.Artists.Items.Select(a => new SpotifyArtistDto
+                {
+                    Id = a.Id,
+                    Name = a.Name,
+                    Popularity = a.Popularity,
+                    Genres = a.Genres,
+                    Images = a.Images?.Select(img => new SpotifyImage
+                    {
+                        Url = img.Url,
+                        Height = img.Height,
+                        Width = img.Width
+                    }).ToList() ?? new List<SpotifyImage>(),
+                    ExternalUrls = a.ExternalUrls
+                }).ToList();
+                
+                return artists;
+            }
+            catch (Exception ex)
+            {
+                // Log the exception
+                Console.WriteLine($"Error searching for artists: {ex.Message}");
+                return new List<SpotifyArtistDto>();
+            }
+        }
+
+        // Add this class to handle the Spotify search response
+        public class SpotifySearchResponse
+        {
+            public SpotifyArtistsResponse? Artists { get; set; }
+            
+            public class SpotifyArtistsResponse
+            {
+                public List<SpotifyArtistResponse>? Items { get; set; }
+            }
+            
+            public class SpotifyArtistResponse
+            {
+                public string Id { get; set; } = string.Empty;
+                public string Name { get; set; } = string.Empty;
+                public int Popularity { get; set; }
+                public List<string> Genres { get; set; } = new();
+                public List<SpotifyImageResponse>? Images { get; set; }
+                public Dictionary<string, string>? ExternalUrls { get; set; }
+            }
+            
+            public class SpotifyImageResponse
+            {
+                public string Url { get; set; } = string.Empty;
+                public int? Height { get; set; }
+                public int? Width { get; set; }
+            }
+        }
+        
+        private async Task<SpotifyArtistDto> GetArtistAsync(string accessToken, string artistId)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiBaseUrl}/artists/{artistId}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            
+            var content = await response.Content.ReadAsStringAsync();
+            return JsonSerializer.Deserialize<SpotifyArtistDto>(content, 
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
         }
 
         // Add this class to support the new batched artist request

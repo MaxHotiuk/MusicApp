@@ -247,5 +247,48 @@ namespace MusicApp.Controllers
                 track.Name = "Unknown Track";
             }
         }
+
+        [HttpGet("search/artists")]
+        public async Task<IActionResult> SearchArtists([FromQuery] string query)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
+                return Unauthorized();
+
+            var user = await _context.Users.FindAsync(userGuid);
+            if (user == null)
+                return NotFound("User not found");
+
+            // Check if token is expired, refresh if needed
+            if (user.SpotifyTokenExpiry <= DateTime.UtcNow)
+            {
+                try
+                {
+                    var tokenResponse = await _spotifyService.RefreshTokenAsync(user.SpotifyRefreshToken!);
+                    user.SpotifyAccessToken = tokenResponse.AccessToken;
+                    if (!string.IsNullOrEmpty(tokenResponse.RefreshToken))
+                        user.SpotifyRefreshToken = tokenResponse.RefreshToken;
+                    user.SpotifyTokenExpiry = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn);
+                    await _context.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    return Unauthorized($"Failed to refresh token: {ex.Message}");
+                }
+            }
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(query))
+                    return Ok(new List<SpotifyArtistDto>());
+                
+                var artists = await _spotifyService.SearchArtistsAsync(user.SpotifyAccessToken!, query);
+                return Ok(artists);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Error searching for artists: {ex.Message}");
+            }
+        }
     }
 }

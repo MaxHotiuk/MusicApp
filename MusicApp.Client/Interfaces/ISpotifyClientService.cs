@@ -10,4 +10,5 @@ public interface ISpotifyClientService
     Task<List<SpotifyTrackDto>> GetPlaylistRecommendationsAsync(string playlistId);
     Task ClearStoredRecommendations(string playlistId);
     Task<bool> HasStoredRecommendations(string playlistId);
+    Task<List<SpotifyArtistDto>> SearchArtistsAsync(string query);
 }
