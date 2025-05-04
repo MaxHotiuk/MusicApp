@@ -5,44 +5,138 @@
 @using MusicApp.Client.Interfaces
 @implements IDisposable
 
-<MudContainer Class="mt-4">
-    <MudText Typo="Typo.h4" Class="mb-4">Welcome to Your Spotify App</MudText>
-    
-    <MudText Typo="Typo.body1" Class="mb-8">
-        This application allows you to connect your Spotify account and view your profile and playlists.
-    </MudText>
-    
+<MudContainer Class="mt-4" MaxWidth="MaxWidth.ExtraLarge">
+    <MudPaper Elevation="3" Class="pa-6 mb-6" Style="background: linear-gradient(135deg, #1DB954 0%, #191414 100%);">
+        <MudText Typo="Typo.h3" Class="mb-2" Style="color: white; font-weight: 700;">Welcome to Music App</MudText>
+        <MudText Typo="Typo.subtitle1" Style="color: white; opacity: 0.8;">Connect your Spotify account and explore your music world</MudText>
+    </MudPaper>
+
     <AuthorizeView>
         <Authorized>
-            <MudCard Class="mb-4">
-                <MudCardContent>
-                    <MudText Typo="Typo.h6">You're connected to Spotify!</MudText>
-                    <MudText Typo="Typo.body1">Use the menu options to explore your profile and playlists.</MudText>
-                </MudCardContent>
-                <MudCardActions>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/profile">View Profile</MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/playlists">View Playlists</MudButton>
-                </MudCardActions>
-            </MudCard>
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="2" Class="feature-card h-100">
+                        <MudCardMedia Style="background: linear-gradient(135deg, #1DB954 0%, #191414 100%); height: 180px; display: flex; align-items: center; justify-content: center;">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" Color="Color.Inherit" Style="color: white; opacity: 0.8;" />
+                        </MudCardMedia>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5" Class="mb-2">Your Profile</MudText>
+                            <MudText Typo="Typo.body1">View your Spotify profile details and statistics</MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton StartIcon="@Icons.Material.Filled.Person" 
+                                      Variant="Variant.Filled" 
+                                      Color="Color.Primary" 
+                                      Href="/profile">
+                                View Profile
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="2" Class="feature-card h-100">
+                        <MudCardMedia Style="background: linear-gradient(135deg, #1DB954 0%, #191414 100%); height: 180px; display: flex; align-items: center; justify-content: center;">
+                            <MudIcon Icon="@Icons.Material.Filled.LibraryMusic" Size="Size.Large" Color="Color.Inherit" Style="color: white; opacity: 0.8;" />
+                        </MudCardMedia>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5" Class="mb-2">Your Playlists</MudText>
+                            <MudText Typo="Typo.body1">Browse and manage your saved Spotify playlists</MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton StartIcon="@Icons.Material.Filled.LibraryMusic" 
+                                      Variant="Variant.Filled" 
+                                      Color="Color.Primary" 
+                                      Href="/playlists">
+                                View Playlists
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="2" Class="feature-card h-100">
+                        <MudCardMedia Style="background: linear-gradient(135deg, #1DB954 0%, #191414 100%); height: 180px; display: flex; align-items: center; justify-content: center;">
+                            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Large" Color="Color.Inherit" Style="color: white; opacity: 0.8;" />
+                        </MudCardMedia>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5" Class="mb-2">Find Artists</MudText>
+                            <MudText Typo="Typo.body1">Search for your favorite artists and explore their music</MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton StartIcon="@Icons.Material.Filled.Search" 
+                                      Variant="Variant.Filled" 
+                                      Color="Color.Primary" 
+                                      Href="/artists/search">
+                                Search Now
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+                
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="2" Class="feature-card h-100">
+                        <MudCardMedia Style="background: linear-gradient(135deg, #1DB954 0%, #191414 100%); height: 180px; display: flex; align-items: center; justify-content: center;">
+                            <MudIcon Icon="@Icons.Material.Filled.Explore" Size="Size.Large" Color="Color.Inherit" Style="color: white; opacity: 0.8;" />
+                        </MudCardMedia>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h5" Class="mb-2">Explore Connections</MudText>
+                            <MudText Typo="Typo.body1">Discover related artists and their connections</MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton StartIcon="@Icons.Material.Filled.Explore" 
+                                      Variant="Variant.Filled" 
+                                      Color="Color.Primary" 
+                                      Href="/discover">
+                                Explore Now
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
         </Authorized>
         <NotAuthorized>
-            <MudCard>
-                <MudCardContent>
-                    <MudText Typo="Typo.h6">Get Started</MudText>
-                    <MudText Typo="Typo.body1">Connect your Spotify account to get started.</MudText>
-                </MudCardContent>
-                <MudCardActions>
-                    <MudButton Variant="Variant.Filled" 
-                            Color="Color.Success" 
-                            OnClick="LoginWithSpotify"
-                            StartIcon="@Icons.Material.Filled.MusicNote">
-                        Connect with Spotify
-                    </MudButton>
-                </MudCardActions>
-            </MudCard>
+            <MudPaper Elevation="2" Class="pa-6 mb-6">
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.h5" Class="mb-4">Get Started with Your Spotify Experience</MudText>
+                        <MudText Typo="Typo.body1" Class="mb-4">
+                            Connect your Spotify account to unlock all features:
+                        </MudText>
+                        <MudList T="string">
+                            <MudListItem Icon="@Icons.Material.Filled.Person">View your profile details</MudListItem>
+                            <MudListItem Icon="@Icons.Material.Filled.LibraryMusic">Browse your playlists</MudListItem>
+                            <MudListItem Icon="@Icons.Material.Filled.Search">Find your favorite artists</MudListItem>
+                            <MudListItem Icon="@Icons.Material.Filled.Explore">Discover new music</MudListItem>
+                        </MudList>
+                        <MudButton Variant="Variant.Filled" 
+                                  Color="Color.Success" 
+                                  OnClick="LoginWithSpotify"
+                                  StartIcon="@Icons.Material.Filled.MusicNote"
+                                  Class="mt-4"
+                                  Size="Size.Large">
+                            Connect with Spotify
+                        </MudButton>
+                    </MudItem>
+                    <MudItem xs="12" md="6" Class="d-flex justify-center align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.MusicNote" Color="Color.Success" Size="Size.Large" Style="font-size: 150px; opacity: 0.8;" />
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
         </NotAuthorized>
     </AuthorizeView>
 </MudContainer>
+
+<style>
+    .feature-card {
+        transition: transform 0.2s;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+</style>
 
 @code {
     private void LoginWithSpotify()
@@ -50,8 +144,6 @@
         NavigationManager.NavigateTo("/login");
     }
 
-    // This component doesn't need any special JS Interop handling
-    // because AuthorizeView already handles prerendering scenarios correctly
     public void Dispose()
     {
         // Clean up resources if needed
